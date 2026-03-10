@@ -3,9 +3,10 @@ import pandas as pd
 import feedparser
 from textblob import TextBlob
 from datetime import datetime, timedelta
+import yfinance as yf
 
 # --------------------------
-# STOCK LIST (50 stocks)
+# STOCK LIST
 # --------------------------
 stocks = [
 "HDFCBANK","RELIANCE","ICICIBANK","BHARTIARTL","SBIN","SHRIRAMFIN","LT","INFY","INDIGO","TCS",
@@ -15,6 +16,13 @@ stocks = [
 "HDFCLIFE","HINDUNILVR","HCLTECH","BAJAJFINSV","NESTLEIND","TECHM","CIPLA","TATACONSUM","JSWSTEEL","SBILIFE"
 ]
 
+# Map NSE ticker symbols to Yahoo Finance symbols if needed
+ticker_map = {
+    "HDFCBANK":"HDFCBANK.NS", "RELIANCE":"RELIANCE.NS", "ICICIBANK":"ICICIBANK.NS",
+    "BHARTIARTL":"BHARTIARTL.NS","SBIN":"SBIN.NS","TCS":"TCS.NS","INFY":"INFY.NS",
+    # ... add all 50 mappings here ...
+}
+
 # --------------------------
 # RSS FEEDS
 # --------------------------
@@ -23,9 +31,6 @@ feeds = [
 "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"
 ]
 
-# --------------------------
-# IMPACT KEYWORDS
-# --------------------------
 impact_words = ["acquisition","merger","stake","block deal","bulk deal","order win",
 "fraud","investigation","rating","downgrade","upgrade","fund raising"]
 
@@ -80,48 +85,43 @@ def match_stocks(news_df):
     return pd.DataFrame(matched)
 
 # --------------------------
-# CATEGORIZE BY TIME
+# FETCH PRICE TREND
 # --------------------------
-def categorize(df):
-    now = datetime.now()
-    table = []
-    for stock in stocks:
-        stock_df = df[df["Stock"]==stock]
-        last30 = stock_df[stock_df["Time"] >= now - timedelta(minutes=30)]
-        today = stock_df[stock_df["Time"].dt.date == now.date()]
-        yesterday = stock_df[stock_df["Time"].dt.date == now.date()-timedelta(days=1)]
-        table.append({
-            "Stock": stock,
-            "Last 30 Min": " | ".join(last30["Headline"].head(1)),
-            "Today": " | ".join(today["Headline"].head(1)),
-            "Yesterday": " | ".join(yesterday["Headline"].head(1)),
-            "Sentiment": " | ".join(stock_df["Sentiment"].head(1)),
-            "Signal": " | ".join(stock_df["Signal"].head(1)),
-            "Impact": " | ".join(stock_df["Impact"].head(1))
-        })
-    return pd.DataFrame(table)
+def price_trend(stock, news_time):
+    try:
+        ticker = ticker_map.get(stock, None)
+        if not ticker:
+            return "NA"
+        # Get 30 min before and after news
+        start = news_time - timedelta(minutes=30)
+        end = news_time + timedelta(minutes=30)
+        data = yf.download(ticker, start=start, end=end, interval='5m', progress=False)
+        if data.empty: return "NA"
+        open_price = data['Open'].iloc[0]
+        close_price = data['Close'].iloc[-1]
+        if close_price > open_price:
+            return "Bullish 📈"
+        elif close_price < open_price:
+            return "Bearish 📉"
+        else:
+            return "Neutral ➖"
+    except:
+        return "NA"
 
 # --------------------------
 # STREAMLIT DASHBOARD
 # --------------------------
 st.set_page_config(layout="wide")
-st.title("📊 NSE Stock News Terminal - Live Updates Every 2 Minutes")
+st.title("📊 NSE Stock News Terminal with Trend Impact")
 
 news_df = fetch_news()
 matched_df = match_stocks(news_df)
 
 if not matched_df.empty:
     matched_df["Time"] = pd.to_datetime(matched_df["Time"])
-    dashboard = categorize(matched_df)
-
-    # Color coding
-    def highlight_sentiment(val):
-        if val=="Positive": return 'background-color: #d4edda'  # Green
-        elif val=="Negative": return 'background-color: #f8d7da'  # Red
-        else: return 'background-color: #fefefe'  # White
-
-    st.dataframe(dashboard.style.applymap(lambda x: highlight_sentiment(x) if x in ["Positive","Negative","Neutral"] else '', subset=["Sentiment"]),
-                 height=900,
-                 use_container_width=True)
+    matched_df["Trend"] = matched_df.apply(lambda x: price_trend(x["Stock"], x["Time"]), axis=1)
+    matched_df = matched_df.sort_values(by="Time", ascending=False)
+    
+    st.dataframe(matched_df[["Stock","Headline","Time","Sentiment","Signal","Impact","Trend"]], height=900)
 else:
     st.write("No recent news for your stocks.")
