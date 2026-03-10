@@ -1,17 +1,24 @@
+# terminal_dashboard.py
 import streamlit as st
 import pandas as pd
 import feedparser
 from textblob import TextBlob
 from datetime import datetime, timedelta
-from streamlit_autorefresh import st_autorefresh  # <- corrected
+import time
 
 # --------------------------
 # AUTO REFRESH every 2 minutes
 # --------------------------
-count = st_autorefresh(interval=120000, limit=None, key="news_refresh")
+refresh_interval = 120  # seconds
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = time.time()
+else:
+    if time.time() - st.session_state.last_refresh > refresh_interval:
+        st.session_state.last_refresh = time.time()
+        st.experimental_rerun()
 
 # --------------------------
-# STOCK LIST
+# STOCK LIST (50 NSE stocks)
 # --------------------------
 stocks = [
 "HDFCBANK","RELIANCE","ICICIBANK","BHARTIARTL","SBIN","SHRIRAMFIN","LT","INFY","INDIGO","TCS",
@@ -29,6 +36,7 @@ feeds = [
 "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"
 ]
 
+# Keywords that imply high impact
 impact_words = ["acquisition","merger","stake","block deal","bulk deal","order win",
 "fraud","investigation","rating","downgrade","upgrade","fund raising"]
 
@@ -41,13 +49,13 @@ def fetch_news():
         feed = feedparser.parse(url)
         for entry in feed.entries:
             try:
-                time = datetime(*entry.published_parsed[:6])
+                time_stamp = datetime(*entry.published_parsed[:6])
             except:
-                time = datetime.now()
+                time_stamp = datetime.now()
             news_list.append({
                 "headline": entry.title,
                 "link": entry.link,
-                "time": time
+                "time": time_stamp
             })
     return pd.DataFrame(news_list)
 
@@ -113,7 +121,7 @@ def categorize(df):
     return pd.DataFrame(table)
 
 # --------------------------
-# DASHBOARD
+# STREAMLIT DASHBOARD
 # --------------------------
 st.set_page_config(layout="wide")
 st.title("📊 NSE Stock News Terminal - Auto Refresh Every 2 Minutes")
@@ -125,6 +133,7 @@ if not matched_df.empty:
     matched_df["Time"] = pd.to_datetime(matched_df["Time"])
     dashboard = categorize(matched_df)
 
+    # Highlight sentiment
     def highlight_sentiment(val):
         if val=="Positive": return 'background-color: #d4edda'  # Green
         elif val=="Negative": return 'background-color: #f8d7da'  # Red
