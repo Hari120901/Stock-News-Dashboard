@@ -3,18 +3,15 @@ import pandas as pd
 import feedparser
 from textblob import TextBlob
 from datetime import datetime, timedelta
+from streamlit_autorefresh import st_autorefresh  # <- corrected
 
 # --------------------------
 # AUTO REFRESH every 2 minutes
 # --------------------------
-st_autorefresh = st.experimental_rerun
-# Use st.experimental_singleton to control refresh
-st.experimental_set_query_params(refresh="true")
-st_autorefresh_interval = 120000  # 2 minutes in milliseconds
-st.experimental_data_editor({}, key="dummy")  # workaround for auto refresh in some Streamlit versions
+count = st_autorefresh(interval=120000, limit=None, key="news_refresh")
 
 # --------------------------
-# STOCK LIST (50 stocks)
+# STOCK LIST
 # --------------------------
 stocks = [
 "HDFCBANK","RELIANCE","ICICIBANK","BHARTIARTL","SBIN","SHRIRAMFIN","LT","INFY","INDIGO","TCS",
@@ -86,7 +83,7 @@ def match_stocks(news_df):
     return pd.DataFrame(matched)
 
 # --------------------------
-# CATEGORIZE BY TIME (with Time columns)
+# CATEGORIZE BY TIME
 # --------------------------
 def categorize(df):
     now = datetime.now()
@@ -116,7 +113,7 @@ def categorize(df):
     return pd.DataFrame(table)
 
 # --------------------------
-# STREAMLIT DASHBOARD
+# DASHBOARD
 # --------------------------
 st.set_page_config(layout="wide")
 st.title("📊 NSE Stock News Terminal - Auto Refresh Every 2 Minutes")
@@ -128,7 +125,6 @@ if not matched_df.empty:
     matched_df["Time"] = pd.to_datetime(matched_df["Time"])
     dashboard = categorize(matched_df)
 
-    # Color coding
     def highlight_sentiment(val):
         if val=="Positive": return 'background-color: #d4edda'  # Green
         elif val=="Negative": return 'background-color: #f8d7da'  # Red
@@ -144,9 +140,3 @@ if not matched_df.empty:
     )
 else:
     st.write("No recent news for your stocks.")
-
-# --------------------------
-# AUTO REFRESH every 2 minutes
-# --------------------------
-st_autorefresh = st_autorefresh_interval = 120000  # 2 minutes
-st.experimental_rerun()
