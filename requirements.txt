@@ -2,4 +2,3 @@ streamlit
 pandas
 feedparser
 textblob
-yfinance
