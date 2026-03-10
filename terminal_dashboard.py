@@ -5,10 +5,14 @@ from textblob import TextBlob
 from datetime import datetime, timedelta
 
 # --------------------------
-# STOCK LIST
+# STOCK LIST (50 stocks)
 # --------------------------
 stocks = [
-"HDFC Bank","Reliance Industries","ICICI Bank","State Bank of India","Tata Consultancy Services"
+"HDFCBANK","RELIANCE","ICICIBANK","BHARTIARTL","SBIN","SHRIRAMFIN","LT","INFY","INDIGO","TCS",
+"ETERNAL","BEL","M&M","AXISBANK","KOTAKBANK","BAJFINANCE","SUNPHARMA","ITC","JIOFIN","ULTRACEMCO",
+"TATASTEEL","ONGC","COALINDIA","MARUTI","TMPV","HINDALCO","BAJAJ-AUTO","POWERGRID","NTPC","ADANIPORTS",
+"EICHERMOT","ADANIENT","TITAN","DRREDDY","APOLLOHOSP","GRASIM","ASIANPAINT","TRENT","WIPRO","MAXHEALTH",
+"HDFCLIFE","HINDUNILVR","HCLTECH","BAJAJFINSV","NESTLEIND","TECHM","CIPLA","TATACONSUM","JSWSTEEL","SBILIFE"
 ]
 
 # --------------------------
@@ -20,7 +24,7 @@ feeds = [
 ]
 
 # --------------------------
-# IMPACT WORDS
+# IMPACT KEYWORDS
 # --------------------------
 impact_words = ["acquisition","merger","stake","block deal","bulk deal","order win",
 "fraud","investigation","rating","downgrade","upgrade","fund raising"]
@@ -76,7 +80,29 @@ def match_stocks(news_df):
     return pd.DataFrame(matched)
 
 # --------------------------
-# DASHBOARD
+# CATEGORIZE BY TIME
+# --------------------------
+def categorize(df):
+    now = datetime.now()
+    table = []
+    for stock in stocks:
+        stock_df = df[df["Stock"]==stock]
+        last30 = stock_df[stock_df["Time"] >= now - timedelta(minutes=30)]
+        today = stock_df[stock_df["Time"].dt.date == now.date()]
+        yesterday = stock_df[stock_df["Time"].dt.date == now.date()-timedelta(days=1)]
+        table.append({
+            "Stock": stock,
+            "Last 30 Min": " | ".join(last30["Headline"].head(1)),
+            "Today": " | ".join(today["Headline"].head(1)),
+            "Yesterday": " | ".join(yesterday["Headline"].head(1)),
+            "Sentiment": " | ".join(stock_df["Sentiment"].head(1)),
+            "Signal": " | ".join(stock_df["Signal"].head(1)),
+            "Impact": " | ".join(stock_df["Impact"].head(1))
+        })
+    return pd.DataFrame(table)
+
+# --------------------------
+# STREAMLIT DASHBOARD
 # --------------------------
 st.set_page_config(layout="wide")
 st.title("📊 NSE Stock News Terminal - Live Updates Every 2 Minutes")
@@ -86,7 +112,16 @@ matched_df = match_stocks(news_df)
 
 if not matched_df.empty:
     matched_df["Time"] = pd.to_datetime(matched_df["Time"])
-    matched_df = matched_df.sort_values(by="Time", ascending=False)
-    st.dataframe(matched_df[["Stock","Headline","Signal","Sentiment","Impact","Time"]], height=800)
+    dashboard = categorize(matched_df)
+
+    # Color coding
+    def highlight_sentiment(val):
+        if val=="Positive": return 'background-color: #d4edda'  # Green
+        elif val=="Negative": return 'background-color: #f8d7da'  # Red
+        else: return 'background-color: #fefefe'  # White
+
+    st.dataframe(dashboard.style.applymap(lambda x: highlight_sentiment(x) if x in ["Positive","Negative","Neutral"] else '', subset=["Sentiment"]),
+                 height=900,
+                 use_container_width=True)
 else:
     st.write("No recent news for your stocks.")
