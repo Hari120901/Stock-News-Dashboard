@@ -1,4 +1,1 @@
-streamlit
-pandas
-feedparser
-textblob
+pip install streamlit pandas feedparser textblob yfinance
